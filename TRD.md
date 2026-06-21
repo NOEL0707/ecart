@@ -349,8 +349,9 @@ Response when threshold is not currently satisfied: `409 Conflict`
 
 Business behavior:
 
-- Every nth successful order is eligible to trigger exactly one discount code.
+- Every nth successful order is eligible to trigger exactly one discount code. For example, when `nthOrder = 3`, order numbers `3`, `6`, `9`, and so on are eligible.
 - The generated code must be unique.
+- Admin generation must create a code for the oldest eligible order number that does not already have a generated code.
 - Admin generation must be idempotent per eligible order number. Repeated calls must not create multiple codes for the same triggering order.
 - Generated codes are single-use.
 - Codes apply only to future checkout requests, not to the order that generated the code.

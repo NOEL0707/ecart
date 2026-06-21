@@ -23,13 +23,14 @@ public class AdminService {
 
     @Transactional
     public DiscountCode generateDiscountCode(GenerateDiscountCodeRequest request) {
-        long orderCount = orderRepository.getReportTotals().ordersCount();
         long nthOrder = request.nthOrder();
-        if (orderCount == 0 || orderCount % nthOrder != 0) {
-            throw new ConflictException("DISCOUNT_NOT_ELIGIBLE", "No undiscounted nth order is currently eligible for discount code generation.");
-        }
-        return discountRepository.findByTriggeredOrderNumber(orderCount)
-                .orElseGet(() -> createDiscountCode(request, orderCount));
+        long eligibleOrderNumber = orderRepository.findOldestUngeneratedNthOrder(nthOrder)
+                .orElseThrow(() -> new ConflictException(
+                        "DISCOUNT_NOT_ELIGIBLE",
+                        "No undiscounted nth order is currently eligible for discount code generation."
+                ));
+        return discountRepository.findByTriggeredOrderNumber(eligibleOrderNumber)
+                .orElseGet(() -> createDiscountCode(request, eligibleOrderNumber));
     }
 
     @Transactional(readOnly = true)

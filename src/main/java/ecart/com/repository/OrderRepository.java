@@ -104,6 +104,23 @@ public class OrderRepository {
         );
     }
 
+    public Optional<Long> findOldestUngeneratedNthOrder(long nthOrder) {
+        try {
+            return Optional.ofNullable(jdbcTemplate.queryForObject("""
+                    SELECT o.order_number
+                      FROM orders o
+                 LEFT JOIN discount_codes d
+                        ON d.triggered_by_order_number = o.order_number
+                     WHERE o.order_number % ? = 0
+                       AND d.code IS NULL
+                     ORDER BY o.order_number ASC
+                     LIMIT 1
+                    """, Long.class, nthOrder));
+        } catch (EmptyResultDataAccessException ex) {
+            return Optional.empty();
+        }
+    }
+
     private OrderHeader mapHeader(ResultSet rs, int rowNum) throws SQLException {
         Integer discountPercent = rs.getObject("discount_percent") == null ? null : rs.getInt("discount_percent");
         return new OrderHeader(

@@ -143,11 +143,47 @@ class EcartApiTests {
     }
 
     @Test
+    void discountCodeGenerationUsesEveryNthOrderNotOnlyCurrentOrderCount() throws Exception {
+        placeSimpleOrder("nth-user-1", "nth-idem-1");
+        placeSimpleOrder("nth-user-2", "nth-idem-2");
+        placeSimpleOrder("nth-user-3", "nth-idem-3");
+        placeSimpleOrder("nth-user-4", "nth-idem-4");
+
+        mockMvc.perform(post("/api/v1/admin/discount-codes")
+                        .header(RequestContext.ADMIN_ID_HEADER, "admin-nth")
+                        .header(RequestContext.ADMIN_ROLE_HEADER, "ADMIN")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"nthOrder":3,"discountPercent":15,"expiresInDays":30}
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.code", is("SAVE15-000003")))
+                .andExpect(jsonPath("$.triggeredByOrderNumber", is(3)));
+    }
+
+    @Test
     void openApiDocsArePublished() throws Exception {
         mockMvc.perform(get("/v3/api-docs"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.openapi").exists())
                 .andExpect(jsonPath("$.info.title", is("Ecart Backend API")));
+    }
+
+    private void placeSimpleOrder(String userId, String idempotencyKey) throws Exception {
+        mockMvc.perform(post("/api/v1/cart/items")
+                        .header(RequestContext.USER_ID_HEADER, userId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"sku":"SKU-NTH","name":"Nth Item","unitPrice":100,"quantity":1}
+                                """))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(post("/api/v1/checkout")
+                        .header(RequestContext.USER_ID_HEADER, userId)
+                        .header(RequestContext.IDEMPOTENCY_KEY_HEADER, idempotencyKey)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isCreated());
     }
 
     private String extractOrderId(String json) {
