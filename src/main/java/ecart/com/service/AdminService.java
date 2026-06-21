@@ -8,9 +8,11 @@ import ecart.com.repository.DiscountRepository;
 import ecart.com.repository.OrderRepository;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
 public class AdminService {
     private final DiscountRepository discountRepository;
@@ -24,18 +26,35 @@ public class AdminService {
     @Transactional
     public DiscountCode generateDiscountCode(GenerateDiscountCodeRequest request) {
         long nthOrder = request.nthOrder();
+        log.info("Request to generate discount code for nthOrder: {}, discountPercent: {}, expiresInDays: {}",
+                nthOrder, request.discountPercent(), request.expiresInDays());
         long eligibleOrderNumber = orderRepository.findOldestUngeneratedNthOrder(nthOrder)
-                .orElseThrow(() -> new ConflictException(
-                        "DISCOUNT_NOT_ELIGIBLE",
-                        "No undiscounted nth order is currently eligible for discount code generation."
-                ));
+                .orElseThrow(() -> {
+                    log.warn("Discount code generation failed: No undiscounted nth order is currently eligible for nthOrder: {}", nthOrder);
+                    return new ConflictException(
+                            "DISCOUNT_NOT_ELIGIBLE",
+                            "No undiscounted nth order is currently eligible for discount code generation."
+                    );
+                });
+        log.info("Found eligible order number: {} for nthOrder: {}", eligibleOrderNumber, nthOrder);
         return discountRepository.findByTriggeredOrderNumber(eligibleOrderNumber)
-                .orElseGet(() -> createDiscountCode(request, eligibleOrderNumber));
+                .map(code -> {
+                    log.info("Discount code already exists for order number: {}. Returning code: {}", eligibleOrderNumber, code.code());
+                    return code;
+                })
+                .orElseGet(() -> {
+                    DiscountCode code = createDiscountCode(request, eligibleOrderNumber);
+                    log.info("Generated new discount code: {} for order number: {}", code.code(), eligibleOrderNumber);
+                    return code;
+                });
     }
 
     @Transactional(readOnly = true)
     public AdminSummaryResponse summary() {
+        log.info("Retrieving admin summary report");
         var totals = orderRepository.getReportTotals();
+        log.info("Admin summary retrieved: itemsPurchasedCount={}, revenue={}, totalDiscountGiven={}, ordersCount={}",
+                totals.itemsPurchasedCount(), totals.revenue(), totals.totalDiscountGiven(), totals.ordersCount());
         return new AdminSummaryResponse(
                 totals.itemsPurchasedCount(),
                 totals.revenue(),
